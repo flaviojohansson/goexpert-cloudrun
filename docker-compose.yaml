@@ -1,0 +1,8 @@
+services:
+  app:
+    build:
+      context: .
+    image: flaviojohansson/goexpert-cloudrun:latest
+    container_name: goexpert-cloudrun
+    ports:
+      - "8080:8080"
