@@ -4,5 +4,7 @@ services:
       context: .
     image: flaviojohansson/goexpert-cloudrun:latest
     container_name: goexpert-cloudrun
+    environment:
+      WEATHER_API_KEY: "your-api-key"
     ports:
       - "8080:8080"
