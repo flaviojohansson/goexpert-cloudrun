@@ -3,75 +3,99 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
+
+	"github.com/joho/godotenv"
 )
 
-func TestGetTemperatura(t *testing.T) {
-	tests := []struct {
-		name           string
-		localidade     string
-		mockResponse   string
-		mockStatusCode int
-		expectedTempC  float64
-		expectedTempF  float64
-		expectedTempK  float64
-		expectError    bool
-	}{
-		{
-			name:           "Successful response",
-			localidade:     "Sao Paulo",
-			mockResponse:   `{"current": {"temp_c": 25.0}}`,
-			mockStatusCode: http.StatusOK,
-			expectedTempC:  25.0,
-			expectedTempF:  77.0,
-			expectedTempK:  298.15,
-			expectError:    false,
-		},
-		{
-			name:           "Non-200 status code",
-			localidade:     "Sao Paulo",
-			mockResponse:   `{"current": {"temp_c": 25.0}}`,
-			mockStatusCode: http.StatusInternalServerError,
-			expectedTempC:  0,
-			expectedTempF:  0,
-			expectedTempK:  0,
-			expectError:    true,
-		},
-		{
-			name:           "JSON unmarshalling error",
-			localidade:     "Sao Paulo",
-			mockResponse:   `invalid json`,
-			mockStatusCode: http.StatusOK,
-			expectedTempC:  0,
-			expectedTempF:  0,
-			expectedTempK:  0,
-			expectError:    true,
-		},
+func TestAPICEPInvalido(t *testing.T) {
+
+	req, err := http.NewRequest("GET", "/temperatura?cep=80530", nil)
+
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(tt.mockStatusCode)
-				w.Write([]byte(tt.mockResponse))
-			}))
-			defer server.Close()
+	req.Header.Set("Content-Type", "application/json")
 
-			weatherURL = server.URL + "?key=%s&q=%s&aqi=no"
+	rr := httptest.NewRecorder()
 
-			tempC, tempF, tempK, err := getTemperatura(tt.localidade)
-			if (err != nil) != tt.expectError {
-				t.Errorf("expected error: %v, got: %v", tt.expectError, err)
-			}
-			if tempC != tt.expectedTempC {
-				t.Errorf("expected tempC: %v, got: %v", tt.expectedTempC, tempC)
-			}
-			if tempF != tt.expectedTempF {
-				t.Errorf("expected tempF: %v, got: %v", tt.expectedTempF, tempF)
-			}
-			if tempK != tt.expectedTempK {
-				t.Errorf("expected tempK: %v, got: %v", tt.expectedTempK, tempK)
-			}
-		})
+	// Faz a chamada para o handler
+	handler := http.HandlerFunc(climaHandler)
+
+	handler.ServeHTTP(rr, req)
+
+	// Check status code
+	if status := rr.Code; status != http.StatusUnprocessableEntity {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusUnprocessableEntity)
+	}
+
+	expected := `{"message": "invalid zipcode"}`
+
+	if responseBody := strings.TrimSpace(rr.Body.String()); responseBody != expected {
+		t.Errorf("handler returned unexpected body: got %v want %v",
+			responseBody, expected)
+	}
+}
+
+func TestAPIOK(t *testing.T) {
+
+	_ = godotenv.Load()
+	weatherAPIKey = os.Getenv("WEATHER_API_KEY")
+
+	req, err := http.NewRequest("GET", "/temperatura?cep=80530000", nil)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+
+	// Faz a chamada para o handler
+	handler := http.HandlerFunc(climaHandler)
+
+	handler.ServeHTTP(rr, req)
+
+	// Check status code
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusOK)
+	}
+
+}
+
+func TestAPINotFound(t *testing.T) {
+
+	req, err := http.NewRequest("GET", "/temperatura?cep=80530999", nil)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+
+	// Faz a chamada para o handler
+	handler := http.HandlerFunc(climaHandler)
+
+	handler.ServeHTTP(rr, req)
+
+	// Check status code
+	if status := rr.Code; status != http.StatusNotFound {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusNotFound)
+	}
+
+	expected := `{"message": "cannot find zipcode"}`
+
+	if responseBody := strings.TrimSpace(rr.Body.String()); responseBody != expected {
+		t.Errorf("handler returned unexpected body: got %v want %v",
+			responseBody, expected)
 	}
 }
